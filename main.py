@@ -163,7 +163,7 @@ async def main():
     setup_application(app, dp, bot=bot)
 
     # Запуск сервера на порту, который предоставляет Koyeb (по умолчанию 8080)
-    web.run_app(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    web.run_app(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
 
 if __name__ == "__main__":
     while True:
