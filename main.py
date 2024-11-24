@@ -2,6 +2,9 @@ import openai
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiohttp import web
+from aiogram.methods.set_webhook import SetWebhook
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 import os
 import asyncio
 import time
@@ -13,6 +16,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ASSISTANT_ID = os.getenv("ASSISTANT_ID")
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # Например, "https://your-app.koyeb.app"
+WEBHOOK_PATH = f"/webhook/{TELEGRAM_TOKEN}"
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
 # Настройка клиента OpenAI
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
@@ -145,12 +151,25 @@ async def handle_message(message: types.Message):
         logging.error(f"Ошибка в обработке сообщения пользователя: {e}")
         await message.answer("Ошибка. Попробуйте позже.")
 
+async def on_startup(bot: Bot):
+    # Установка вебхука с использованием метода SetWebhook
+    set_webhook = SetWebhook(url=WEBHOOK_URL, drop_pending_updates=True)
+    result = await bot(set_webhook)
+    if result:
+        logging.info("Вебхук успешно установлен.")
+
 async def main():
-    # Запуск long polling
-    try:
-        await dp.start_polling(bot)
-    except Exception as e:
-        logging.error(f"Произошла ошибка при запуске polling: {e}")
+    # Настраиваем сервер AIOHTTP для работы с вебхуком
+    app = web.Application()
+
+    # Используем SimpleRequestHandler для регистрации пути вебхука и маршрутов
+    SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=None).register(app, path=WEBHOOK_PATH)
+
+    # Настройка приложения AIOHTTP с использованием setup_application для привязки старта и остановки диспетчера
+    setup_application(app, dp, bot=bot)
+
+    # Запуск сервера на порту, который предоставляет Koyeb (по умолчанию 8080)
+    web.run_app(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
 
 if __name__ == "__main__":
     while True:
