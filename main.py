@@ -18,10 +18,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ASSISTANT_ID = os.getenv("ASSISTANT_ID")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # Например, "https://your-app.koyeb.app"
-WEBHOOK_PATH = f"/webhook/{TELEGRAM_TOKEN}"
-WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "my-secret")
+WEB_HOST = os.getenv("WEB_HOST")  # Например, "https://your-app.koyeb.app"
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"{WEB_HOST}{WEBHOOK_PATH}"
+
 
 # Настройка клиента OpenAI
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
@@ -159,7 +159,7 @@ async def handle_message(message: types.Message):
 
 async def on_startup(bot: Bot):
     # Установка вебхука с использованием метода SetWebhook
-    set_webhook = SetWebhook(url=WEBHOOK_URL, secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
+    set_webhook = SetWebhook(url=WEBHOOK_URL, drop_pending_updates=True)
     result = await bot(set_webhook)
     if result:
         logging.info("Вебхук успешно установлен.")
@@ -184,7 +184,7 @@ def main() -> None:
     dp.startup.register(lambda: on_startup(bot))
 
     # Запуск приложения на сервере
-    web.run_app(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    web.run_app(app, host="0.0.0.0", port= 8000)
 
 
 if __name__ == "__main__":
