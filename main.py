@@ -1,39 +1,50 @@
 import openai
 import logging
-from aiohttp import web
+import sys
 import os
-import asyncio
+from aiohttp import web
 import time
+from dotenv import load_dotenv
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart
+from aiogram import Bot, Dispatcher
+from aiogram.filters import Command
+from aiogram.client.default import DefaultBotProperties
+from aiogram.types import Message
 from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiogram.methods.set_webhook import SetWebhook
+
+load_dotenv()
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", stream=sys.stdout)
 
-# Настройка переменных окружения
+
+# Замените на ваши ключи и ID
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ASSISTANT_ID = os.getenv("ASSISTANT_ID")
-WEB_HOST = os.getenv("WEB_HOST")  # Например, "https://your-app.koyeb.app"
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"{WEB_HOST}{WEBHOOK_PATH}"
 
+# Убедитесь, что ключи были успешно загружены
+if not TELEGRAM_TOKEN or not OPENAI_API_KEY or not ASSISTANT_ID:
+    raise EnvironmentError("Не удалось загрузить переменные окружения из .env файла")
+
+# Настройка вебхука
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+WEB_SERVER_HOST = "0.0.0.0"
+WEB_SERVER_PORT = 8080
 
 # Настройка клиента OpenAI
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
-bot = Bot(token=TELEGRAM_TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=TELEGRAM_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
 # Хранилище thread_id для каждого пользователя
 user_threads = {}
 
 
-@dp.message(CommandStart())
-async def start_command(message: types.Message):
+@dp.message(Command("start"))
+async def start_command(message: Message):
     user_id = message.from_user.id
 
     try:
@@ -53,8 +64,7 @@ async def start_command(message: types.Message):
         # Создаем и запускаем Run, используя существующего ассистента
         run = client.beta.threads.runs.create_and_poll(
             thread_id=thread.id,
-            assistant_id=ASSISTANT_ID,
-            instructions="Ответь на приветствие пользователя."
+            assistant_id=ASSISTANT_ID
         )
 
         # Проверяем статус и отправляем ответ пользователю
@@ -76,11 +86,6 @@ async def start_command(message: types.Message):
                     if content_block.type == "text":
                         response_text += content_block.text.value
 
-                # Проверяем на наличие ключевых слов
-                if any(keyword in response_text.lower() for keyword in ["первый ключ", "второй ключ", "третий ключ"]):
-                    # Сначала отправляем текст с эмодзи "🗝"
-                    await message.answer("🗝")
-
                 # Отправляем извлеченный текст пользователю
                 await message.answer(response_text)
             else:
@@ -93,7 +98,7 @@ async def start_command(message: types.Message):
 
 
 @dp.message()
-async def handle_message(message: types.Message):
+async def handle_message(message: Message):
     user_id = message.from_user.id
 
     # Проверяем, есть ли сохранённый thread_id для этого пользователя
@@ -103,7 +108,7 @@ async def handle_message(message: types.Message):
 
     # Если сообщение не является текстом (например, фото, видео, стикер и т.д.)
     if not message.text:
-        await message.answer("О это интересно. Я жду ответа 🫴")
+        await message.answer("О-о-о это интересно. Я жду ответа 🫴")
         return
 
     thread_id = user_threads[user_id]
@@ -142,7 +147,7 @@ async def handle_message(message: types.Message):
                         response_text += content_block.text.value
 
                 # Проверяем на наличие ключевых слов
-                if any(keyword in response_text.lower() for keyword in ["первый ключ", "второй ключ", "третий ключ"]):
+                if any(keyword in response_text.lower() for keyword in ["число твоей души", "число твоей личности", "число твоей судьбы"]):
                     # Сначала отправляем текст с эмодзи "🗝"
                     await message.answer("🗝")
 
@@ -159,32 +164,29 @@ async def handle_message(message: types.Message):
 
 async def on_startup(bot: Bot):
     # Установка вебхука с использованием метода SetWebhook
-    set_webhook = SetWebhook(url=WEBHOOK_URL, drop_pending_updates=True)
-    result = await bot(set_webhook)
-    if result:
-        logging.info("Вебхук успешно установлен.")
+    await bot.set_webhook(f"{WEBHOOK_URL}{WEBHOOK_PATH}")
+
 
 
 def main() -> None:
+
+    dp.startup.register(on_startup)
+
     # Создаем aiohttp.web.Application
     app = web.Application()
 
     # Используем SimpleRequestHandler для регистрации пути вебхука и маршрутов
     webhook_requests_handler = SimpleRequestHandler(
         dispatcher=dp,
-        bot=bot,
-        secret_token=WEBHOOK_SECRET,
+        bot=bot
     )
     webhook_requests_handler.register(app, path=WEBHOOK_PATH)
 
     # Монтируем диспетчер к приложению
     setup_application(app, dp, bot=bot)
 
-    # Регистрируем хуки старта
-    dp.startup.register(lambda: on_startup(bot))
-
     # Запуск приложения на сервере
-    web.run_app(app, host="0.0.0.0", port= 8000)
+    web.run_app(app, host=WEB_SERVER_HOST, port=WEB_SERVER_PORT)
 
 
 if __name__ == "__main__":
