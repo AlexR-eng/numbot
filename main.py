@@ -5,11 +5,13 @@ import os
 from aiohttp import web
 import time
 from dotenv import load_dotenv
+import asyncio
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from aiogram.types import Message, InlineKeyboardButton, ReplyKeyboardMarkup
 from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
@@ -150,9 +152,16 @@ async def handle_message(message: Message):
                 if any(keyword in response_text.lower() for keyword in ["число твоей души", "число твоей личности", "число твоей судьбы"]):
                     # Сначала отправляем текст с эмодзи "🗝"
                     await message.answer("🗝")
-
-                # Отправляем извлеченный текст пользователю
-                await message.answer(response_text)
+                # Проверяем на наличие фразы "нажми кнопку"
+                if "нажми кнопку" in response_text.lower():
+                    # Добавляем инлайн кнопку
+                    spin_button = InlineKeyboardButton(text="Крути колесо", callback_data="spin_wheel")
+                    keyboard = InlineKeyboardBuilder()
+                    keyboard.add(spin_button)
+                    await message.answer(response_text, reply_markup=keyboard.as_markup())
+                else:
+                    # Отправляем извлеченный текст пользователю
+                    await message.answer(response_text)
             else:
                 await message.answer("Не удалось получить ответ от ассистента.")
         else:
@@ -161,6 +170,18 @@ async def handle_message(message: Message):
         logging.error(f"Ошибка в обработке сообщения пользователя: {e}")
         await message.answer("Ошибка. Попробуйте позже.")
 
+#Обработчик нажатия кнопки крути колесо
+@dp.callback_query(lambda c: c.data == "spin_wheel")
+async def handle_spin_wheel(callback_query: types.CallbackQuery):
+    try:
+        # Отправляем первое сообщение
+        await callback_query.message.answer("Колесо Фортуны вращается...")
+        await asyncio.sleep(3)  # Задержка в 3 секунды
+        # Отправляем второе сообщение
+        await callback_query.message.answer("Вы выиграли мини-курс по нумерологии")
+    except Exception as e:
+        logging.error(f"Ошибка в обработке callback_query: {e}")
+        await callback_query.message.answer("Ошибка. Попробуйте позже.")
 
 async def on_startup(bot: Bot):
     # Установка вебхука с использованием метода SetWebhook
